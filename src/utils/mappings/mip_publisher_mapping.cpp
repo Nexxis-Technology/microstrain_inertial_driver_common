@@ -284,12 +284,19 @@ float MipPublisherMapping::getMaxDataRate(uint8_t descriptor_set) const
 
 bool MipPublisherMapping::canPublish(const std::string& topic) const
 {
-  return !getDescriptors(topic).empty();
+  //Body hack, but I don't want the time reference to be doubly attached to packets. 
+  if (topic.compare(IMU_TIME_REFERENCE_TOPIC) == 0 )
+    return true;
+  else
+    return !getDescriptors(topic).empty();
 }
 
 bool MipPublisherMapping::shouldPublish(const std::string& topic) const
 {
-  return canPublish(topic) && getDataRate(topic) != DATA_CLASS_DATA_RATE_DO_NOT_STREAM;
+  if (topic.compare(IMU_TIME_REFERENCE_TOPIC) == 0) 
+    return true;
+  else 
+    return canPublish(topic) && getDataRate(topic) != DATA_CLASS_DATA_RATE_DO_NOT_STREAM;
 }
 
 const std::map<std::string, FieldWrapper::SharedPtrVec> MipPublisherMapping::static_topic_to_mip_type_mapping_ =

@@ -24,6 +24,8 @@
 #include "microstrain_inertial_driver_common/utils/clock_bias_monitor.h"
 #include "microstrain_inertial_driver_common/config.h"
 
+#include <sensor_msgs/TimeReference.h>
+
 namespace microstrain
 {
 
@@ -224,6 +226,7 @@ public:
     }
 
 
+
    private:
     const std::string topic_;  /// The topic that this class will publish to
     float data_rate_;  /// The data rate in hertz that this topic is streamed at
@@ -237,6 +240,8 @@ public:
   // IMU Publishers
   Publisher<ImuMsg>::SharedPtr                        imu_raw_pub_     = Publisher<ImuMsg>::initialize(IMU_DATA_RAW_TOPIC);
   Publisher<ImuMsg>::SharedPtr                        imu_pub_         = Publisher<ImuMsg>::initialize(IMU_DATA_TOPIC);
+  Publisher<sensor_msgs::TimeReference>::SharedPtr   imu_time_ref_pub_ = Publisher<sensor_msgs::TimeReference>::initialize(IMU_TIME_REFERENCE_TOPIC);
+  
   Publisher<MagneticFieldMsg>::SharedPtr              mag_pub_         = Publisher<MagneticFieldMsg>::initialize(IMU_MAG_TOPIC);
   Publisher<FluidPressureMsg>::SharedPtr              pressure_pub_    = Publisher<FluidPressureMsg>::initialize(IMU_PRESSURE_TOPIC);
   Publisher<TwistWithCovarianceStampedMsg>::SharedPtr wheel_speed_pub_ = Publisher<TwistWithCovarianceStampedMsg>::initialize(IMU_WHEEL_SPEED_TOPIC);
@@ -405,6 +410,31 @@ private:
    * \param gps_timestamp Optional timestamp to use instead of the most recent GPS timestamp. Only used if non-null
    */
   void updateHeaderTime(RosHeaderType* header, uint8_t descriptor_set, mip::Timestamp timestamp, const mip::data_shared::GpsTimestamp* gps_timestamp = nullptr);
+
+  /** Helper function to set time for timeref, done whenever imu_data is set. 
+   * 
+   */
+  void set_timeref(const uint8_t descriptor_set, mip::Timestamp ros_timestamp) {
+      auto imu_time_ref_msg = imu_time_ref_pub_->getMessageToUpdate();
+      updateHeaderTime(&(imu_time_ref_msg->header), descriptor_set, ros_timestamp);
+      // Need to search the descriptor to get the latest GPS time. 
+      if (gps_timestamp_mapping_.find(descriptor_set) != gps_timestamp_mapping_.end()) {
+        auto timestamp = gps_timestamp_mapping_.at(descriptor_set);
+
+        double seconds;
+        double subseconds = modf(timestamp.tow, &seconds);
+
+        // Seconds since start of Unix time = seconds between 1970 and 1980 + number of weeks since 1980 * number of seconds in a week + number of complete seconds past in current week - leap seconds since start of GPS time
+        const uint64_t utc_milliseconds = static_cast<uint64_t>((315964800 + timestamp.week_number * 604800 + static_cast<uint64_t>(seconds) - GPS_LEAP_SECONDS) * 1000L) + static_cast<uint64_t>(std::round(subseconds * 1000.0));
+        
+        setRosTime(&imu_time_ref_msg->time_ref, static_cast<double>(utc_milliseconds) / 1000.0);
+
+        }
+      else {
+        printf("ERROR! set_timeref function: DESCRIPTOR NOT FOUND IN TIMESTAMP MAPPING");
+      }
+
+  }
 
   /**
    * \brief Updates the header's timestamp to the UTC representation of the GPS timestamp

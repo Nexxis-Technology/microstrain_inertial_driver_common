@@ -85,6 +85,7 @@ bool Publishers::configure()
 {
   imu_raw_pub_->configure(node_, config_);
   imu_pub_->configure(node_, config_);
+  imu_time_ref_pub_->configure(node_, config_);
   mag_pub_->configure(node_, config_);
   pressure_pub_->configure(node_, config_);
   wheel_speed_pub_->configure(node_, config_);
@@ -135,6 +136,7 @@ bool Publishers::configure()
   // Frame ID configuration
   imu_raw_pub_->getMessage()->header.frame_id = config_->frame_id_;
   imu_pub_->getMessage()->header.frame_id = config_->frame_id_;
+  imu_time_ref_pub_->getMessage()->header.frame_id = config_->frame_id_;
   mag_pub_->getMessage()->header.frame_id = config_->frame_id_;
   pressure_pub_->getMessage()->header.frame_id = config_->frame_id_;
   wheel_speed_pub_->getMessage()->header.frame_id = config_->odometer_frame_id_;
@@ -404,6 +406,7 @@ bool Publishers::activate()
 {
   imu_raw_pub_->activate();
   imu_pub_->activate();
+  imu_time_ref_pub_->activate();
   mag_pub_->activate();
   pressure_pub_->activate();
   wheel_speed_pub_->activate();
@@ -466,6 +469,7 @@ bool Publishers::deactivate()
 {
   imu_raw_pub_->deactivate();
   imu_pub_->deactivate();
+  imu_time_ref_pub_->deactivate();
   mag_pub_->deactivate();
   pressure_pub_->deactivate();
   wheel_speed_pub_->deactivate();
@@ -511,6 +515,7 @@ void Publishers::publish()
   // For custom ROS messages, the messages are published directly in the callbacks
   imu_raw_pub_->publish();
   imu_pub_->publish();
+  imu_time_ref_pub_->publish();
   mag_pub_->publish();
   pressure_pub_->publish();
   wheel_speed_pub_->publish();
@@ -696,6 +701,8 @@ void Publishers::handleSensorScaledGyro(const mip::data_sensor::ScaledGyro& scal
   }
 }
 
+
+
 void Publishers::handleSensorDeltaTheta(const mip::data_sensor::DeltaTheta& delta_theta, const uint8_t descriptor_set, mip::Timestamp timestamp)
 {
   // Attempt to get the delta time, if we can't find it we will estimate based on the data rate
@@ -707,7 +714,9 @@ void Publishers::handleSensorDeltaTheta(const mip::data_sensor::DeltaTheta& delt
 
   // We use this delta measurement to exclude outliers and provide a more useful IMU measurement
   auto imu_msg = imu_pub_->getMessageToUpdate();
+  set_timeref(descriptor_set, timestamp);
   updateHeaderTime(&(imu_msg->header), descriptor_set, timestamp);
+  
   imu_msg->angular_velocity.x = delta_theta.delta_theta[0] / delta_time;
   imu_msg->angular_velocity.y = delta_theta.delta_theta[1] / delta_time;
   imu_msg->angular_velocity.z = delta_theta.delta_theta[2] / delta_time;
@@ -716,6 +725,9 @@ void Publishers::handleSensorDeltaTheta(const mip::data_sensor::DeltaTheta& delt
     imu_msg->angular_velocity.y *= -1.0;
     imu_msg->angular_velocity.z *= -1.0;
   }
+
+
+
 }
 
 void Publishers::handleSensorDeltaVelocity(const mip::data_sensor::DeltaVelocity& delta_velocity, const uint8_t descriptor_set, mip::Timestamp timestamp)
@@ -728,6 +740,7 @@ void Publishers::handleSensorDeltaVelocity(const mip::data_sensor::DeltaVelocity
     delta_time = 1 / imu_pub_->dataRate();
 
   auto imu_msg = imu_pub_->getMessageToUpdate();
+  set_timeref(descriptor_set, timestamp);
   updateHeaderTime(&(imu_msg->header), descriptor_set, timestamp);
   imu_msg->linear_acceleration.x = USTRAIN_G * delta_velocity.delta_velocity[0] / delta_time;
   imu_msg->linear_acceleration.y = USTRAIN_G * delta_velocity.delta_velocity[1] / delta_time;
@@ -743,7 +756,9 @@ void Publishers::handleSensorCompQuaternion(const mip::data_sensor::CompQuaterni
 {
   // Rotate the quaternion into the correct frame
   auto imu_msg = imu_pub_->getMessageToUpdate();
+  set_timeref(descriptor_set, timestamp);
   updateHeaderTime(&(imu_msg->header), descriptor_set, timestamp);
+
   const tf2::Transform microstrain_vehicle_to_ned_transform_tf(tf2::Quaternion(comp_quaternion.q[1], comp_quaternion.q[2], comp_quaternion.q[3], comp_quaternion.q[0]));
   if (config_->use_enu_frame_)
   {
@@ -2142,6 +2157,7 @@ void Publishers::updateHeaderTime(RosHeaderType* header, uint8_t descriptor_set,
   // Set the timestamp depending on how the node was configured
   if (config_->timestamp_source_ == TIMESTAMP_SOURCE_ROS)
   {
+    // We want to do this if either source is ros or ros mip.
     setRosTime(&header->stamp, static_cast<double>(timestamp) / 1000.0);
   }
   else if (config_->timestamp_source_ == TIMESTAMP_SOURCE_MIP)
@@ -2169,6 +2185,7 @@ void Publishers::updateHeaderTime(RosHeaderType* header, uint8_t descriptor_set,
     const double utc_timestamp_subseconds = modf(utc_timestamp, &utc_timestamp_seconds);
     setRosTime(&header->stamp, static_cast<int32_t>(utc_timestamp_seconds), static_cast<int32_t>(utc_timestamp_subseconds * 1000000000));
   }
+
 }
 
 void Publishers::setGpsTime(RosTimeType* time, const mip::data_shared::GpsTimestamp& timestamp)
