@@ -415,25 +415,9 @@ private:
    * 
    */
   void set_timeref(const uint8_t descriptor_set, mip::Timestamp ros_timestamp) {
-      auto imu_time_ref_msg = imu_time_ref_pub_->getMessageToUpdate();
-      updateHeaderTime(&(imu_time_ref_msg->header), descriptor_set, ros_timestamp);
-      // Need to search the descriptor to get the latest GPS time. 
-      if (gps_timestamp_mapping_.find(descriptor_set) != gps_timestamp_mapping_.end()) {
-        auto timestamp = gps_timestamp_mapping_.at(descriptor_set);
-
-        double seconds;
-        double subseconds = modf(timestamp.tow, &seconds);
-
-        // Seconds since start of Unix time = seconds between 1970 and 1980 + number of weeks since 1980 * number of seconds in a week + number of complete seconds past in current week - leap seconds since start of GPS time
-        const uint64_t utc_milliseconds = static_cast<uint64_t>((315964800 + timestamp.week_number * 604800 + static_cast<uint64_t>(seconds) - GPS_LEAP_SECONDS) * 1000L) + static_cast<uint64_t>(std::round(subseconds * 1000.0));
-        
-        setRosTime(&imu_time_ref_msg->time_ref, static_cast<double>(utc_milliseconds) / 1000.0);
-
-        }
-      else {
-        printf("ERROR! set_timeref function: DESCRIPTOR NOT FOUND IN TIMESTAMP MAPPING");
-      }
-
+    auto imu_time_ref_msg = imu_time_ref_pub_->getMessageToUpdate();
+    updateHeaderTime(&(imu_time_ref_msg->header), descriptor_set, ros_timestamp);
+    imu_time_ref_msg->time_ref = imu_time_ref_msg->header.stamp;
   }
 
   /**
