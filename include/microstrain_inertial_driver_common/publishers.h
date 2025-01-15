@@ -411,14 +411,12 @@ private:
    */
   void updateHeaderTime(RosHeaderType* header, uint8_t descriptor_set, mip::Timestamp timestamp, const mip::data_shared::GpsTimestamp* gps_timestamp = nullptr);
 
-  /** Helper function to set time for timeref, done whenever imu_data is set. 
-   * 
+  /**
+   * \brief Helper function to set time for timeref, call this whenever imu_data is set.
+   * \param descriptor_set The descriptor set that should be used to lookup the timestamp if we want to use the device timestamp
+   * \param ros_timestamp The timestamp provided by the MIP SDK for when the packet was received
    */
-  void set_timeref(const uint8_t descriptor_set, mip::Timestamp ros_timestamp) {
-    auto imu_time_ref_msg = imu_time_ref_pub_->getMessageToUpdate();
-    updateHeaderTime(&(imu_time_ref_msg->header), descriptor_set, ros_timestamp);
-    imu_time_ref_msg->time_ref = imu_time_ref_msg->header.stamp;
-  }
+  void set_timeref(const uint8_t descriptor_set, mip::Timestamp ros_timestamp);
 
   /**
    * \brief Updates the header's timestamp to the UTC representation of the GPS timestamp

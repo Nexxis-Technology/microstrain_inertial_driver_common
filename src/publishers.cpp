@@ -2188,6 +2188,12 @@ void Publishers::updateHeaderTime(RosHeaderType* header, uint8_t descriptor_set,
 
 }
 
+void Publishers::set_timeref(const uint8_t descriptor_set, mip::Timestamp ros_timestamp) {
+    auto imu_time_ref_msg = imu_time_ref_pub_->getMessageToUpdate();
+    updateHeaderTime(&(imu_time_ref_msg->header), descriptor_set, ros_timestamp);
+    imu_time_ref_msg->time_ref = imu_time_ref_msg->header.stamp;
+}
+
 void Publishers::setGpsTime(RosTimeType* time, const mip::data_shared::GpsTimestamp& timestamp)
 {
   // Split the seconds and subseconds out to get around the double resolution issue
